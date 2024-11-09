@@ -2,6 +2,12 @@ import express, { Application, Request, Response } from "express";
 import cors from "cors";
 import asyncHandler from "express-async-handler";
 import { InfrastructureService } from "./setup-infra";
+import { config } from "dotenv";
+
+config();
+
+const sshKey = process.env.SSH_KEY || "";
+console.log(sshKey);
 
 export enum Providers {
   "AWS" = "AWS",
@@ -20,7 +26,7 @@ app.post(
     const {
       domain,
       accessKeyId,
-      secretAccessKey,
+      secretAccessKey = "",
       provider,
       dnsApiKey,
       dnsSecretApiKey,
@@ -31,6 +37,7 @@ app.post(
       accessKeyId,
       secretAccessKey,
       provider,
+      sshKey,
     );
 
     res.setHeader("Content-Type", "text/plain");

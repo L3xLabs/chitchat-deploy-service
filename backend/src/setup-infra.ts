@@ -9,21 +9,26 @@ export class InfrastructureService {
   accessKeyId: string;
   secretAccessKey: string;
   provider: Providers;
+  sshKey: string;
 
   constructor(
     baseDomain: string,
     accessKeyId: string,
     secretAccessKey: string,
     provider: Providers,
+    sshKey: string,
   ) {
     this.baseDomain = baseDomain;
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
     this.provider = provider;
+    this.sshKey = sshKey;
   }
 
   async setupTerraform() {
-    const terraformCode = `terraform {
+    const terraformCode =
+      this.provider === Providers.AWS
+        ? `terraform {
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -42,7 +47,7 @@ provider "aws" {
 
 resource "aws_key_pair" "deployer" {
   key_name   = "deployer-key"
-  public_key = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIFOXGptTOfCPNMB8e4IHhIN95UHCm5APj8IcwKXY9RVj mayurpachpor@Mayurs-MacBook-Air.local"
+  public_key = "${this.sshKey}"
 }
 
 resource "aws_security_group" "allow_ssh_http_https" {
@@ -106,16 +111,83 @@ resource "aws_s3_bucket" "example_bucket" {
   }
 }
 
-# resource "aws_route53_record" "dns_record" {
-#   zone_id = "<ROUTE53_ZONE_ID>"
-#   name    = "${this.baseDomain}"
-#   type    = "A"
-#   ttl     = "300"
-#   records = [aws_instance.ec2_example.public_ip]
-# }
-
 output "instance_ip" {
   value = aws_instance.ec2_example.public_ip
+}
+`
+        : `terraform {
+  required_providers {
+    vultr = {
+      source  = "vultr/vultr"
+      version = "~> 2.0"
+    }
+  }
+  required_version = ">= 1.2.0"
+}
+
+provider "vultr" {
+  api_key     = "${this.accessKeyId}"
+  rate_limit  = 700
+  retry_limit = 3
+}
+
+resource "vultr_ssh_key" "deployer" {
+  name    = "deployer-key"
+  ssh_key = "${this.sshKey}"
+}
+
+resource "vultr_firewall_group" "allow_ssh_http_https" {
+  description = "Allow SSH, HTTP, and HTTPS"
+}
+
+resource "vultr_firewall_rule" "allow_ssh" {
+  firewall_group_id = vultr_firewall_group.allow_ssh_http_https.id
+  protocol          = "tcp"
+  ip_type           = "v4"
+  subnet            = "0.0.0.0"
+  subnet_size       = 0
+  port              = "22"
+  notes             = "Allow SSH"
+}
+
+resource "vultr_firewall_rule" "allow_http" {
+  firewall_group_id = vultr_firewall_group.allow_ssh_http_https.id
+  protocol          = "tcp"
+  ip_type           = "v4"
+  subnet            = "0.0.0.0"
+  subnet_size       = 0
+  port              = "80"
+  notes             = "Allow HTTP"
+}
+
+resource "vultr_firewall_rule" "allow_https" {
+  firewall_group_id = vultr_firewall_group.allow_ssh_http_https.id
+  protocol          = "tcp"
+  ip_type           = "v4"
+  subnet            = "0.0.0.0"
+  subnet_size       = 0
+  port              = "443"
+  notes             = "Allow HTTPS"
+}
+
+resource "vultr_instance" "server" {
+  plan              = "vc2-1c-1gb"
+  region            = "bom"
+  os_id             = 1743
+  hostname          = "ChitChat-Server"
+  label             = "ChitChat-Server"
+  firewall_group_id = vultr_firewall_group.allow_ssh_http_https.id
+  ssh_key_ids       = [vultr_ssh_key.deployer.id]
+}
+
+resource "vultr_object_storage" "storage" {
+  cluster_id = 2
+  label      = "${this.baseDomain}-storage"
+
+}
+
+output "instance_ip" {
+  value = vultr_instance.server.main_ip
 }
 `;
     fs.mkdirSync(`./infra/${this.accessKeyId}`);
@@ -420,7 +492,7 @@ matrix.${this.baseDomain} ansible_host=${instanceIP} ${this.provider === Provide
     await this.runTerraform(response);
     const terraformOutput = await this.getTerraformOutput(response);
     const instanceIP = JSON.parse(terraformOutput).instance_ip.value;
-    await this.createRecords(instanceIP, dnsApiKey, dnsSecretApiKey, response);
+    // await this.createRecords(instanceIP, dnsApiKey, dnsSecretApiKey, response);
     await this.configureAnsibleInventory(instanceIP, response);
     this.uploadAndRemoveConfig();
     // await this.runAnsiblePlaybook();
