@@ -7,7 +7,7 @@ const StreamComponent: React.FC = () => {
   useEffect(() => {
     const fetchStream = async () => {
       try {
-        const response = await fetch("http://your-server-url/stream-endpoint", {
+        const response = await fetch("http://localhost:8000/api/setup", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
