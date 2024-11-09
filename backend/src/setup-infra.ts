@@ -1,4 +1,4 @@
-import { spawn, exec } from "child_process";
+import { spawn } from "child_process";
 import fs from "fs";
 import { Response } from "express";
 import { Providers } from ".";

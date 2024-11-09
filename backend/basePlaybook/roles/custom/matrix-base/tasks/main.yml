@@ -1,0 +1,23 @@
+---
+
+- tags:
+    - setup-all
+    - install-all
+  block:
+    - ansible.builtin.include_tasks: "{{ role_path }}/tasks/validate_config.yml"
+
+# This needs to always run, because it populates `matrix_user_uid` and `matrix_user_gid`,
+# which are required by many other roles.
+- tags:
+    - always
+    - setup-system-user
+    - common
+  block:
+    - ansible.builtin.include_tasks: "{{ role_path }}/tasks/setup_matrix_user.yml"
+
+- tags:
+    - setup-all
+    - install-all
+    - common
+  block:
+    - ansible.builtin.include_tasks: "{{ role_path }}/tasks/setup_matrix_base.yml"
