@@ -7,7 +7,20 @@ const StreamComponent: React.FC = () => {
   useEffect(() => {
     const fetchStream = async () => {
       try {
-        const response = await fetch("http://your-server-url/stream-endpoint");
+        const response = await fetch("http://your-server-url/stream-endpoint", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            domain: process.env.NEXT_PUBLIC_DOMAIN,
+            accessKeyId: process.env.NEXT_PUBLIC_ACCESS_KEY_ID,
+            secretAccessKey: process.env.NEXT_PUBLIC_SECRET_ACCESS_KEY,
+            provider: process.env.NEXT_PUBLIC_PROVIDER,
+            dnsApiKey: process.env.NEXT_PUBLIC_DNS_API_KEY,
+            dnsSecretApiKey: process.env.NEXT_PUBLIC_DNS_SECRET_API_KEY,
+          }),
+        });
         if (!response.ok) {
           throw new Error("Failed to connect to stream");
         }
@@ -35,7 +48,6 @@ const StreamComponent: React.FC = () => {
     fetchStream();
   }, []);
 
-  // Autoscroll to the end of the stream data whenever new data is added
   useEffect(() => {
     if (endRef.current) {
       endRef.current.scrollIntoView({ behavior: "smooth" });
