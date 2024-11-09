@@ -1,8 +1,8 @@
-"use client";
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 
 const StreamComponent: React.FC = () => {
   const [streamData, setStreamData] = useState<string>("");
+  const endRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const fetchStream = async () => {
@@ -24,9 +24,7 @@ const StreamComponent: React.FC = () => {
           const { value, done: isDone } = await reader.read();
           done = isDone;
           if (value) {
-            setStreamData(
-              (prev) => prev + decoder.decode(value, { stream: true })
-            );
+            setStreamData((prev) => prev + decoder.decode(value));
           }
         }
       } catch (error) {
@@ -37,10 +35,25 @@ const StreamComponent: React.FC = () => {
     fetchStream();
   }, []);
 
+  // Autoscroll to the end of the stream data whenever new data is added
+  useEffect(() => {
+    if (endRef.current) {
+      endRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [streamData]);
+
   return (
-    <div>
+    <div
+      style={{
+        height: "400px",
+        overflowY: "auto",
+        border: "1px solid #ccc",
+        padding: "10px",
+      }}
+    >
       <h2>Streaming Data</h2>
       <pre>{streamData}</pre>
+      <div ref={endRef} />
     </div>
   );
 };
