@@ -8,7 +8,6 @@ export class InfrastructureService {
   baseDomain: string;
   accessKeyId: string;
   secretAccessKey: string;
-  playbookPath: string;
   provider: Providers;
 
   constructor(
@@ -20,7 +19,6 @@ export class InfrastructureService {
     this.baseDomain = baseDomain;
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
-    this.playbookPath = "./playbook.yml";
     this.provider = provider;
   }
 
@@ -125,6 +123,7 @@ output "instance_ip" {
   }
 
   async runTerraform(response: Response) {
+    response.write("Setting up infra");
     return new Promise<void>((resolve, reject) => {
       const terraformProcess = spawn(
         "terraform",
@@ -159,6 +158,7 @@ output "instance_ip" {
   }
 
   async getTerraformOutput(response: Response) {
+    response.write("Retriving the ip of newly created machine \n");
     return new Promise<string>((resolve, reject) => {
       let output = "";
 
@@ -261,6 +261,8 @@ output "instance_ip" {
       ttl: 600,
     };
 
+    response.write("Creating DNS Records \n");
+
     const resOne = await createDNSRecord(
       recordOneData,
       dnsApiKey,
@@ -268,9 +270,9 @@ output "instance_ip" {
     );
 
     if (resOne.ok) {
-      response.write(resOne.msg);
+      response.write(`${resOne.msg} \n`);
     } else {
-      response.write(resOne.msg);
+      response.write(`${resOne.msg} \n`);
       response.end();
       return;
     }
@@ -282,9 +284,9 @@ output "instance_ip" {
     );
 
     if (resTwo.ok) {
-      response.write(resTwo.msg);
+      response.write(`${resTwo.msg} \n`);
     } else {
-      response.write(resTwo.msg);
+      response.write(`${resTwo.msg} \n`);
       response.end();
       return;
     }
@@ -296,9 +298,9 @@ output "instance_ip" {
     );
 
     if (resThree.ok) {
-      response.write(resThree.msg);
+      response.write(`${resThree.msg} \n`);
     } else {
-      response.write(resThree.msg);
+      response.write(`${resThree.msg} \n`);
       response.end();
       return;
     }
@@ -309,9 +311,9 @@ output "instance_ip" {
     );
 
     if (resFour.ok) {
-      response.write(resFour.msg);
+      response.write(`${resFour.msg} \n`);
     } else {
-      response.write(resFour.msg);
+      response.write(`${resFour.msg} \n`);
       response.end();
       return;
     }
@@ -322,9 +324,9 @@ output "instance_ip" {
     );
 
     if (resFive.ok) {
-      response.write(resFive.msg);
+      response.write(`${resFive.msg} \n`);
     } else {
-      response.write(resFive.msg);
+      response.write(`${resFive.msg} \n`);
       response.end();
       return;
     }
@@ -335,9 +337,9 @@ output "instance_ip" {
     );
 
     if (resSix.ok) {
-      response.write(resSix.msg);
+      response.write(`${resSix.msg} \n`);
     } else {
-      response.write(resSix.msg);
+      response.write(`${resSix.msg} \n`);
       response.end();
       return;
     }
@@ -348,9 +350,9 @@ output "instance_ip" {
     );
 
     if (resSeven.ok) {
-      response.write(resSeven.msg);
+      response.write(`${resSeven.msg} \n`);
     } else {
-      response.write(resSeven.msg);
+      response.write(`${resSeven.msg} \n`);
       response.end();
       return;
     }
@@ -361,14 +363,14 @@ output "instance_ip" {
     );
 
     if (resEaight.ok) {
-      response.write(resEaight.msg);
+      response.write(`${resEaight.msg} \n`);
     } else {
-      response.write(resEaight.msg);
+      response.write(`${resEaight.msg} \n`);
       response.end();
       return;
     }
 
-    response.write("All DNS Records Created!");
+    response.write("All DNS Records Created! \n");
     return;
   }
 
@@ -385,7 +387,7 @@ matrix.${this.baseDomain} ansible_host=${instanceIP} ${this.provider === Provide
       inventoryContent,
     );
 
-    response.end("Ansible inventory configured"); //Change this to response.write()
+    response.end("Ansible inventory configured \n"); //Change this to response.write()
     return;
   }
 
