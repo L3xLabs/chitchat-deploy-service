@@ -1,6 +1,4 @@
-"use client";
-
-import React, { useState } from "react";
+import React, { useState, useRef, useEffect } from "react";
 
 const ConfigForm = () => {
   const [formData, setFormData] = useState({
@@ -14,6 +12,25 @@ const ConfigForm = () => {
   const [streamData, setStreamData] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState("");
+  const streamOutputRef = useRef<HTMLPreElement>(null);
+  const [autoScroll, setAutoScroll] = useState(true);
+
+  // Auto-scroll effect
+  useEffect(() => {
+    if (autoScroll && streamOutputRef.current) {
+      streamOutputRef.current.scrollTop = streamOutputRef.current.scrollHeight;
+    }
+  }, [streamData, autoScroll]);
+
+  // Handle manual scroll to detect if user has scrolled up
+  const handleScroll = (e: React.UIEvent<HTMLPreElement>) => {
+    const element = e.currentTarget;
+    const isScrolledToBottom =
+      Math.abs(
+        element.scrollHeight - element.clientHeight - element.scrollTop
+      ) < 50; // Using 50px threshold
+    setAutoScroll(isScrolledToBottom);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -28,6 +45,7 @@ const ConfigForm = () => {
     setError("");
     setIsStreaming(true);
     setStreamData("");
+    setAutoScroll(true);
 
     try {
       const response = await fetch("http://localhost:8000/api/setup", {
@@ -66,11 +84,9 @@ const ConfigForm = () => {
   };
 
   return (
-    <div className="max-w-4xl mx-auto p-6 text-black">
+    <div className="max-w-4xl mx-auto p-6">
       <div className="bg-white rounded-lg shadow-md p-6 mb-6">
-        <h2 className="text-2xl font-bold mb-6 text-black">
-          Configuration Settings
-        </h2>
+        <h2 className="text-2xl font-bold mb-6">Configuration Settings</h2>
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
@@ -190,12 +206,28 @@ const ConfigForm = () => {
 
       {(streamData || isStreaming) && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-2xl font-bold mb-4">Stream Output</h2>
-          <div className="h-96 overflow-y-auto bg-gray-50 p-4 rounded-md">
-            <pre className="whitespace-pre-wrap font-mono text-sm">
-              {streamData}
-            </pre>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-2xl font-bold">Stream Output</h2>
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="autoScroll"
+                checked={autoScroll}
+                onChange={(e) => setAutoScroll(e.target.checked)}
+                className="rounded border-gray-300 text-blue-500 focus:ring-blue-500"
+              />
+              <label htmlFor="autoScroll" className="text-sm text-gray-600">
+                Auto-scroll
+              </label>
+            </div>
           </div>
+          <pre
+            ref={streamOutputRef}
+            onScroll={handleScroll}
+            className="h-96 overflow-y-auto bg-gray-50 p-4 rounded-md font-mono text-sm whitespace-pre-wrap"
+          >
+            {streamData}
+          </pre>
         </div>
       )}
     </div>
