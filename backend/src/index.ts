@@ -38,6 +38,8 @@ app.post(
       secretAccessKey,
       provider,
       sshKey,
+      "meru",
+      "meru@meru",
     );
 
     res.setHeader("Content-Type", "text/plain");

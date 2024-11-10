@@ -10,6 +10,9 @@ export class InfrastructureService {
   secretAccessKey: string;
   provider: Providers;
   sshKey: string;
+  grafanaUserName: string;
+  grafanaPassword: string;
+  sshKeyPath: string;
 
   constructor(
     baseDomain: string,
@@ -17,12 +20,18 @@ export class InfrastructureService {
     secretAccessKey: string,
     provider: Providers,
     sshKey: string,
+    grafanaUserName: string,
+    grafanaPassword: string,
   ) {
     this.baseDomain = baseDomain;
     this.accessKeyId = accessKeyId;
     this.secretAccessKey = secretAccessKey;
     this.provider = provider;
     this.sshKey = sshKey;
+    this.grafanaUserName = grafanaUserName;
+    this.grafanaPassword = grafanaPassword;
+    fs.writeFileSync(`./keys/ssh_key`, sshKey);
+    this.sshKeyPath = `./keys/ssh_key`;
   }
 
   async setupTerraform() {
@@ -180,12 +189,6 @@ resource "vultr_instance" "server" {
   ssh_key_ids       = [vultr_ssh_key.deployer.id]
 }
 
-resource "vultr_object_storage" "storage" {
-  cluster_id = 2
-  label      = "${this.baseDomain}-storage"
-
-}
-
 output "instance_ip" {
   value = vultr_instance.server.main_ip
 }
@@ -228,7 +231,6 @@ output "instance_ip" {
       });
     });
   }
-
   async getTerraformOutput(response: Response) {
     response.write("Retriving the ip of newly created machine \n");
     return new Promise<string>((resolve, reject) => {
@@ -260,7 +262,6 @@ output "instance_ip" {
       });
     });
   }
-
   async createRecords(
     ip: string,
     dnsApiKey: string,
@@ -447,41 +448,134 @@ output "instance_ip" {
   }
 
   async configureAnsibleInventory(instanceIP: string, response: Response) {
-    fs.mkdirSync(`./infra/${this.accessKeyId}_playbook`);
+    fs.mkdirSync(`./infra/${this.accessKeyId}_playbook`, { recursive: true });
+
     fs.cpSync("./basePlaybook", `./infra/${this.accessKeyId}_playbook`, {
       recursive: true,
     });
 
     const inventoryContent = `[matrix_servers]
-matrix.${this.baseDomain} ansible_host=${instanceIP} ${this.provider === Providers.AWS ? "ansible_ssh_user=ubuntu" : "ansible_ssh_user=root"}`;
+matrix.${this.baseDomain} ansible_host=${instanceIP} ansible_user=root ansible_ssh_private_key_file=${this.sshKeyPath}`;
+
     fs.writeFileSync(
       `./infra/${this.accessKeyId}_playbook/inventory/hosts`,
       inventoryContent,
     );
 
-    response.end("Ansible inventory configured \n"); //Change this to response.write()
+    const varsContent = `
+---
+matrix_domain: ${this.baseDomain}
+
+matrix_homeserver_implementation: synapse
+
+matrix_homeserver_generic_secret_key: "kwF9KZOu8Hqv6xMC8FjoMKfRLJPVegHfsYff2w8WVrM8SOwOsUTHMcYkYiqyvGQv"
+
+matrix_playbook_reverse_proxy_type: playbook-managed-traefik
+
+traefik_config_certificatesResolvers_acme_email: "admin@${this.baseDomain}"
+
+postgres_connection_password: "ovwtlpnYrCmczpzNLTGA9u54tbkjiabbS0P4YajP2DqfUzL1Vqar0N9mi8NHa4it"
+
+matrix_static_files_container_labels_base_domain_enabled: true
+
+prometheus_enabled: true
+
+prometheus_node_exporter_enabled: true
+
+prometheus_postgres_exporter_enabled: true
+
+matrix_prometheus_nginxlog_exporter_enabled: true
+
+grafana_enabled: true
+
+grafana_anonymous_access: false
+
+grafana_default_admin_user: "${this.grafanaUserName}"
+
+grafana_default_admin_password: "${this.grafanaPassword}"
+# #Identity Server
+matrix_ma1sd_enabled: true
+
+matrix_synapse_enable_registration: true
+matrix_synapse_enable_registration_captcha: true
+matrix_synapse_recaptcha_public_key: "6Le_XGUqAAAAAGGkZj-eUU6cFbQPG8CMs4ofCch3"
+matrix_synapse_recaptcha_private_key: "6Le_XGUqAAAAACupk1qMYHw4bMSvRcuJ6A4gS-eA"
+matrix_coturn_enabled: true
+matrix_coturn_turn_external_ip_address:
+
+jitsi_enabled: true
+
+matrix_admin: "@admin:{{ matrix_domain }}"
+
+#Whatsapp bridge
+matrix_mautrix_whatsapp_enabled: true
+matrix_mautrix_whatsapp_bridge_relay_enabled: true
+matrix_mautrix_whatsapp_bridge_relay_admin_only: false
+matrix_appservice_double_puppet_enabled: true
+
+matrix_synapse_workers_enabled: true
+matrix_synapse_workers_preset: specialized-workers
+`;
+    fs.mkdirSync(
+      `./infra/${this.accessKeyId}_playbook/inventory/host_vars/matrix.${this.baseDomain}`,
+    );
+    fs.writeFileSync(
+      `./infra/${this.accessKeyId}_playbook/inventory/host_vars/matrix.${this.baseDomain}/vars.yml`,
+      varsContent,
+    );
+
+    response.write("Ansible inventory configured \n");
     return;
   }
 
   async uploadAndRemoveConfig() {
     console.log("uploading terraform folder and removing it from memory");
   }
-  // async runAnsiblePlaybook() {
-  //   return new Promise((resolve, reject) => {
-  //     exec(
-  //       `ansible-playbook -i ${this.inventoryPath} ${this.playbookPath}`,
-  //       (error, stdout, stderr) => {
-  //         if (error) {
-  //           console.error(`Ansible Playbook Error: ${error.message}`);
-  //           return reject(error);
-  //         }
-  //         console.log(`Ansible Output: ${stdout}`);
-  //         if (stderr) console.error(`Ansible Stderr: ${stderr}`);
-  //         resolve(stdout);
-  //       },
-  //     );
-  //   });
-  // }
+
+  async setupServices(response: Response) {
+    new Promise<void>((resolve, reject) => {
+      const ansibleProcess = spawn(
+        "ansible-playbook",
+        ["-i", "inventory/hosts", "setup.yml", "--tags=setup-all", "-vv"],
+        {
+          cwd: `./infra/${this.accessKeyId}_playbook`,
+          shell: true,
+          stdio: ["inherit", "pipe", "pipe"],
+        },
+      );
+
+      let outputBuffer = "";
+
+      ansibleProcess.stdout.on("data", (data) => {
+        const output = data.toString();
+        outputBuffer += output;
+        response.write(output);
+      });
+
+      ansibleProcess.stderr.on("data", (data) => {
+        const errorOutput = data.toString();
+        outputBuffer += errorOutput;
+        response.write(`ERROR: ${errorOutput}`);
+      });
+
+      ansibleProcess.on("close", (code) => {
+        if (code === 0) {
+          response.write(`Setting up ChitChat finished successfully\n`);
+          resolve();
+        } else {
+          const errorMessage = `Ansible playbook execution failed with code ${code}\n${outputBuffer}`;
+          response.write(errorMessage);
+          reject(new Error(errorMessage));
+        }
+      });
+
+      ansibleProcess.on("error", (error) => {
+        const errorMessage = `Failed to start Ansible process: ${error.message}`;
+        response.write(errorMessage);
+        reject(new Error(errorMessage));
+      });
+    });
+  }
 
   async setupInfrastructure(
     response: Response,
@@ -492,9 +586,15 @@ matrix.${this.baseDomain} ansible_host=${instanceIP} ${this.provider === Provide
     await this.runTerraform(response);
     const terraformOutput = await this.getTerraformOutput(response);
     const instanceIP = JSON.parse(terraformOutput).instance_ip.value;
-    // await this.createRecords(instanceIP, dnsApiKey, dnsSecretApiKey, response);
-    await this.configureAnsibleInventory(instanceIP, response);
-    this.uploadAndRemoveConfig();
-    // await this.runAnsiblePlaybook();
+    await this.createRecords(instanceIP, dnsApiKey, dnsSecretApiKey, response);
+
+    if (this.provider === Providers.VULTUR) {
+      await this.configureAnsibleInventory(instanceIP, response);
+      await this.setupServices(response);
+      this.uploadAndRemoveConfig();
+    } else {
+      // await this.setupInfra(response);
+      this.uploadAndRemoveConfig();
+    }
   }
 }

@@ -9,6 +9,7 @@
     "dev": "npx tsc -b && node ./dist/index.js"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.688.0",
     "axios": "^1.7.7",
     "cors": "^2.8.5",
     "dotenv": "^16.4.5",
