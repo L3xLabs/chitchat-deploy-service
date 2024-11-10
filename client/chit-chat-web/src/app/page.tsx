@@ -1,6 +1,5 @@
-import StreamComponent from "@/components/StreamComponent";
-import Image from "next/image";
+import ConfigForm from "@/components/ConfigForm";
 
 export default function Home() {
-  return <StreamComponent />;
+  return <ConfigForm />;
 }
